@@ -30,7 +30,51 @@ void shminit() {
 
 int shm_open(int id, char **pointer) {
 
-//you write this
+struct shm_page *page;
+acquire(&(shm_table.lock));
+int exists;
+int i;
+
+exists  = 0;
+
+for(i=0; i <64;i++)
+{
+     page = &shm_table.shm_pages[i];
+    if(page->id == id)
+    {
+      cprintf("WE FOUND A MATCH!\n");
+      exists = 1;
+      break;
+    }
+}
+
+if(!exists)
+{
+  int emptypageindex=-1;
+
+    for(i=0; i<64;i++)
+    {
+        if (shm_table.shm_pages[i].refcnt ==0)
+        {
+          emptypageindex = i;
+          break;
+        }  
+    }
+
+     
+     //page  = &shm_table.shm_pages[emptypageindex];
+     page->frame = kalloc();
+     page->refcnt =1;    
+
+     uint sz = PGROUNDUP(myproc()->sz);
+    mappages(myproc()->pgdir,(char*)sz,PGSIZE,V2P(page->frame),PTE_W|PTE_U);
+}
+
+
+
+
+
+release(&(shm_table.lock));
 
 
 
