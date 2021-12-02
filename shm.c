@@ -31,46 +31,44 @@ void shminit() {
 int shm_open(int id, char **pointer) {
 
 struct shm_page *page;
+struct proc* curproc = myproc();
 acquire(&(shm_table.lock));
-int exists;
+uint pageInd = 64;
 int i;
-
-exists  = 0;
 
 for(i=0; i <64;i++)
 {
-     page = &shm_table.shm_pages[i];
+    page = &shm_table.shm_pages[i];
+    if (page->refcnt == 0)
+      pageInd = i;      // use an unallocated page in case we don't find the id
     if(page->id == id)
     {
-      cprintf("WE FOUND A MATCH!\n");
-      exists = 1;
+      pageInd = i;      // immediately break so pageInd not written over by an id 0
       break;
     }
 }
 
-if(!exists)
-{
-  int emptypageindex=-1;
-
-    for(i=0; i<64;i++)
-    {
-        if (shm_table.shm_pages[i].refcnt ==0)
-        {
-          emptypageindex = i;
-          break;
-        }  
-    }
-
-     
-     //page  = &shm_table.shm_pages[emptypageindex];
-     page->frame = kalloc();
-     page->refcnt =1;    
-
-     uint sz = PGROUNDUP(myproc()->sz);
-    mappages(myproc()->pgdir,(char*)sz,PGSIZE,V2P(page->frame),PTE_W|PTE_U);
+if (pageInd == 64) {    // unnecessary edge case
+  release(&(shm_table.lock));
+  return 0;
 }
 
-
+uint newsz = PGROUNDUP(curproc->sz);
+if (page->refcnt == 0) {
+  page->id = id;
+  page->frame = kalloc();
+  memset(page->frame, 0, PGSIZE);
+  mappages(curproc->pgdir, (void*)newsz, PGSIZE, V2P(page->frame), PTE_W|PTE_U);
+  //cprintf("%d %d\n", *pointer, newsz);
+  *pointer = (char*)(newsz); 
+  curproc->sz = newsz + PGSIZE;
+  page->refcnt = 1;
+} else {
+  mappages(curproc->pgdir, (void*)newsz, PGSIZE, V2P(page->frame), PTE_W|PTE_U);
+  *pointer = (char*)(newsz);
+  curproc->sz = newsz + PGSIZE;
+  page->refcnt++;
+}
 
 
 
@@ -85,9 +83,27 @@ return 0; //added to remove compiler warning -- you should decide what to return
 
 int shm_close(int id) {
 //you write this too!
+uint i;
+struct shm_page* page;
 
+acquire(&(shm_table.lock));
+for(i=0; i <64;i++)
+{
+    page = &shm_table.shm_pages[i];
+    if(page->id == id)
+    {
+      if (page->refcnt > 1) {
+        page->refcnt--;
+      } else {
+        memset(page, 0, sizeof(struct shm_page));
+      }
+      release(&(shm_table.lock));
+      return 0; //added to remove compiler warning -- you should decide what to return
+    }
+}
 
-
+release(&(shm_table.lock));
 
 return 0; //added to remove compiler warning -- you should decide what to return
 }
+
