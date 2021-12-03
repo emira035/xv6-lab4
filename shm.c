@@ -40,7 +40,7 @@ struct shm_page *page;
 struct proc* curproc = myproc();
 
 acquire(&(shm_table.lock)); // acquire the shared memory lock because we will be working on the shm table
-uint pageInd = 64;
+uint pageInd = 64; // index of page we will work with, or 64 if all are used
 int i;
 
 
@@ -69,11 +69,11 @@ uint newsz = PGROUNDUP(curproc->sz); // va space where we can use to map page fr
 //case 2 :  shared memory segment is not found.
 if (page->refcnt == 0) { 
   page->id = id;
-  page->frame = kalloc(); //allocate one page and store its physical page.
+  page->frame = kalloc(); //allocate one page
   memset(page->frame, 0, PGSIZE); // sets the block of memory (page) to zero
   mappages(curproc->pgdir, (void*)newsz, PGSIZE, V2P(page->frame), PTE_W|PTE_U); // map the page
   //cprintf("%d %d\n", *pointer, newsz);
-  *pointer = (char*)(newsz); //set pointer that points to virtual address
+  *pointer = (char*)(newsz); //set the pointer to the virtual address we used
   curproc->sz = newsz + PGSIZE; //update sz because its va space grew
   page->refcnt = 1;  // set the reference count to 1 because its the first process to access page.
 
@@ -82,7 +82,7 @@ if (page->refcnt == 0) {
 //case 1: id matches to a shared memory segment
 else { 
   mappages(curproc->pgdir, (void*)newsz, PGSIZE, V2P(page->frame), PTE_W|PTE_U);// map the page
-  *pointer = (char*)(newsz); //set pointer that points to virtual address
+  *pointer = (char*)(newsz); //set the pointer to the virtual address we used
   curproc->sz = newsz + PGSIZE; //update sz because its va space grew
   page->refcnt++; // increase reference count by 1 because it has been previously accessed
 }
